@@ -1,7 +1,8 @@
 {
-  "name": "dashboard",
+  "name": "aetherview-digital-twin-dashboard",
   "version": "0.1.0",
   "private": true,
+  "description": "A premium browser-based dashboard for reviewing Gaussian splat digital twins with Next.js and PlayCanvas.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,18 +10,19 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "next": "14.2.35",
+    "playcanvas": "^2.19.0-preview.0",
     "react": "^18",
-    "react-dom": "^18",
-    "next": "14.2.35"
+    "react-dom": "^18"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
+    "typescript": "^5"
   }
 }

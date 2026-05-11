@@ -3,25 +3,80 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --surface-base: #0a0a0a;
+  --surface-panel: #111214;
+  --surface-panel-elevated: #17191d;
+  --text-primary: #f4f7fb;
+  --text-secondary: rgba(228, 235, 247, 0.7);
+  --text-muted: rgba(228, 235, 247, 0.46);
+  --accent-blue: #3b82f6;
+  --accent-blue-soft: rgba(59, 130, 246, 0.18);
+  --tone-brass: #d0ba92;
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --panel-shadow: 0 32px 90px rgba(0, 0, 0, 0.34);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100svh;
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(208, 186, 146, 0.08), transparent 28%),
+    linear-gradient(180deg, #0d0f14 0%, #090a0d 52%, #060708 100%);
+  color: var(--text-primary);
+  font-family: var(--font-body), "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+main {
+  min-height: 100svh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@media (max-width: 1279px) {
+  body {
+    background:
+      radial-gradient(circle at top, rgba(59, 130, 246, 0.1), transparent 28%),
+      linear-gradient(180deg, #0d0f14 0%, #090a0d 52%, #060708 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
