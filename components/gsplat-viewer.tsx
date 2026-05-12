@@ -468,6 +468,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
     const presetTransitionRef = useRef<CameraTransition | null>(null);
     const heroOrbitRef = useRef<HeroOrbitState | null>(null);
     const hasPlayedHeroOrbitRef = useRef(false);
+    const loadSessionRef = useRef(0);
     const initialPresetIdRef = useRef<string>(
       initialPresetId ?? presets[0]?.id ?? "",
     );
@@ -546,6 +547,28 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
       sceneReadyRef.current = false;
       setViewpointMotionState(false);
     }, [setViewpointMotionState]);
+
+    const beginLoadSession = useCallback(
+      (nextAssetName: string) => {
+        loadSessionRef.current += 1;
+        const nextSessionId = loadSessionRef.current;
+
+        clearCurrentScene();
+        setErrorState(null);
+        setLoadProgress(12);
+        setViewpointMotionState(false);
+        publishStats({
+          assetName: nextAssetName,
+          splatCount: null,
+          fps: statsRef.current.fps,
+          gpuMemoryBytes: statsRef.current.gpuMemoryBytes,
+        });
+        updateLoadState("loading");
+
+        return nextSessionId;
+      },
+      [clearCurrentScene, publishStats, setViewpointMotionState, updateLoadState],
+    );
 
     const syncOrbitFromPose = useCallback(() => {
       orbitRef.current = deriveOrbitFromPose(
@@ -626,23 +649,6 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
         };
       },
       [cancelHeroOrbit, setViewpointMotionState, syncOrbitFromPose],
-    );
-
-    const prepareForAssetLoad = useCallback(
-      (nextAssetName: string) => {
-        clearCurrentScene();
-        setErrorState(null);
-        setLoadProgress(12);
-        setViewpointMotionState(false);
-        publishStats({
-          assetName: nextAssetName,
-          splatCount: null,
-          fps: statsRef.current.fps,
-          gpuMemoryBytes: statsRef.current.gpuMemoryBytes,
-        });
-        updateLoadState("loading");
-      },
-      [clearCurrentScene, publishStats, setViewpointMotionState, updateLoadState],
     );
 
     const frameLoadedEntity = useCallback(
@@ -763,7 +769,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
         if (!pc || !app)
           return;
 
-        prepareForAssetLoad(nextAssetName);
+        const loadSessionId = beginLoadSession(nextAssetName);
 
         await new Promise<void>((resolve, reject) => {
           const asset = new pc.Asset(nextAssetName, "gsplat", {
@@ -780,7 +786,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
             receivedBytes: number,
             totalBytes: number,
           ) => {
-            if (totalBytes <= 0)
+            if (loadSessionRef.current !== loadSessionId || totalBytes <= 0)
               return;
 
             const nextProgress = Math.min(
@@ -791,6 +797,14 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
           };
 
           const handleAssetLoad = () => {
+            if (loadSessionRef.current !== loadSessionId) {
+              disposeAssetListeners();
+              asset.unload();
+              app.assets.remove(asset);
+              resolve();
+              return;
+            }
+
             const entity = new pc.Entity(nextAssetName);
             entity.addComponent("gsplat", {
               asset,
@@ -815,6 +829,11 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
 
           const handleAssetError = (error: unknown) => {
             disposeAssetListeners();
+            if (loadSessionRef.current !== loadSessionId) {
+              resolve();
+              return;
+            }
+
             reject(error);
           };
 
@@ -824,6 +843,9 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
           app.assets.add(asset);
           app.assets.load(asset);
         }).catch((error) => {
+          if (loadSessionRef.current !== loadSessionId)
+            return;
+
           setErrorState({
             eyebrow: "Asset Load Error",
             title: "Unable to open this scene.",
@@ -840,7 +862,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
           setLoadProgress(100);
         });
       },
-      [frameLoadedEntity, prepareForAssetLoad, publishStats, updateLoadState],
+      [beginLoadSession, frameLoadedEntity, publishStats, updateLoadState],
     );
 
     const loadFile = useCallback(
@@ -874,7 +896,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
           return;
         }
 
-        prepareForAssetLoad(file.name);
+        const loadSessionId = beginLoadSession(file.name);
         setLoadProgress(26);
 
         const nextBlobUrl = URL.createObjectURL(file);
@@ -897,6 +919,13 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
             );
           });
 
+          if (loadSessionRef.current !== loadSessionId) {
+            asset.unload();
+            app.assets.remove(asset);
+            URL.revokeObjectURL(nextBlobUrl);
+            return;
+          }
+
           const entity = new pc.Entity(file.name);
           entity.addComponent("gsplat", {
             asset,
@@ -910,6 +939,11 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
 
           await frameLoadedEntity(pc, entity, file.name, asset);
         } catch (error) {
+          if (loadSessionRef.current !== loadSessionId) {
+            URL.revokeObjectURL(nextBlobUrl);
+            return;
+          }
+
           setErrorState({
             eyebrow: "Asset Load Error",
             title: "Unable to open this scene.",
@@ -926,7 +960,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
           setLoadProgress(100);
         }
       },
-      [frameLoadedEntity, prepareForAssetLoad, publishStats, updateLoadState],
+      [beginLoadSession, frameLoadedEntity, publishStats, updateLoadState],
     );
 
     useImperativeHandle(
@@ -1403,6 +1437,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
         }
 
         clearCurrentScene();
+        loadSessionRef.current += 1;
         appRef.current?.destroy();
         appRef.current = null;
         graphicsDeviceRef.current = null;
@@ -1414,6 +1449,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
       assetUrl,
       cancelHeroOrbit,
       clearCurrentScene,
+      beginLoadSession,
       initialPresetId,
       loadRemoteAsset,
       onViewportInteract,
@@ -1502,7 +1538,10 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
           ref={inputRef}
           type="file"
           accept=".ply,.sog"
+          hidden
+          aria-hidden="true"
           className="hidden"
+          style={{ display: "none" }}
           onChange={(event: ChangeEvent<HTMLInputElement>) => {
             const selectedFile = event.target.files?.[0];
             event.target.value = "";

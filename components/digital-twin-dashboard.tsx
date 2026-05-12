@@ -342,11 +342,7 @@ export function DigitalTwinDashboard({
         <motion.section
           {...focusStack.getPanelProps("identity")}
           tabIndex={0}
-          initial={
-            shouldReduceMotion
-              ? false
-              : { opacity: 0, x: -26, y: -16, scale: 0.985 }
-          }
+          initial={false}
           animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
           transition={{
             ...panelSpring,
@@ -404,11 +400,7 @@ export function DigitalTwinDashboard({
         <motion.section
           {...focusStack.getPanelProps("viewpoints")}
           tabIndex={0}
-          initial={
-            shouldReduceMotion
-              ? false
-              : { opacity: 0, x: -28, y: 8, scale: 0.985 }
-          }
+          initial={false}
           animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
           transition={{
             ...panelSpring,
@@ -473,11 +465,7 @@ export function DigitalTwinDashboard({
         <motion.section
           {...focusStack.getPanelProps("stats")}
           tabIndex={0}
-          initial={
-            shouldReduceMotion
-              ? false
-              : { opacity: 0, x: 26, y: -16, scale: 0.985 }
-          }
+          initial={false}
           animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
           transition={{
             ...panelSpring,
@@ -535,11 +523,7 @@ export function DigitalTwinDashboard({
         <motion.section
           {...focusStack.getPanelProps("utility")}
           tabIndex={0}
-          initial={
-            shouldReduceMotion
-              ? false
-              : { opacity: 0, y: 24, scale: 0.985 }
-          }
+          initial={false}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{
             ...panelSpring,
@@ -590,11 +574,7 @@ export function DigitalTwinDashboard({
             <motion.section
               {...focusStack.getPanelProps("diagnostics")}
               tabIndex={0}
-              initial={
-                shouldReduceMotion
-                  ? false
-                  : { opacity: 0, y: 18, scale: 0.96, filter: "blur(10px)" }
-              }
+              initial={false}
               animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
               exit={
                 shouldReduceMotion
@@ -684,11 +664,7 @@ export function DigitalTwinDashboard({
 
       <div className="pointer-events-none absolute inset-0 z-20 lg:hidden">
         <motion.section
-          initial={
-            shouldReduceMotion
-              ? false
-              : { opacity: 0, y: -18, scale: 0.985 }
-          }
+          initial={false}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{
             ...panelSpring,
@@ -720,11 +696,7 @@ export function DigitalTwinDashboard({
         </motion.section>
 
         <motion.section
-          initial={
-            shouldReduceMotion
-              ? false
-              : { opacity: 0, y: 22, scale: 0.985 }
-          }
+          initial={false}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{
             ...panelSpring,

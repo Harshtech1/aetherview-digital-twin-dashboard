@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 
 import "./globals.css";
 
@@ -13,6 +14,13 @@ const monoFont = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
   display: "swap",
+});
+
+const displayFont = localFont({
+  src: "./fonts/GeistVF.woff",
+  variable: "--font-display",
+  display: "swap",
+  weight: "100 900",
 });
 
 export const metadata: Metadata = {
@@ -29,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${bodyFont.variable} ${monoFont.variable} font-sans antialiased tracking-tight`}
+        className={`${bodyFont.variable} ${monoFont.variable} ${displayFont.variable} font-sans antialiased tracking-tight`}
       >
         {children}
       </body>
