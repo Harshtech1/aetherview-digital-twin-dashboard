@@ -246,6 +246,7 @@ export function DigitalTwinDashboard({
   const hiddenHudClassName = isZenMode
     ? "pointer-events-none opacity-0"
     : "opacity-100";
+  const zenToggleLabel = isZenMode ? "Restore HUD" : "Zen Mode";
 
   const revealCopyFeedback = (message: string) => {
     setCopyFeedback(message);
@@ -405,21 +406,31 @@ export function DigitalTwinDashboard({
 
       <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(4,5,8,0.18),rgba(4,5,8,0.02)_34%,rgba(4,5,8,0.22))]" />
 
-      <div className="pointer-events-none absolute right-6 top-6 z-30">
+      <div
+        className={`pointer-events-none absolute z-30 transition-all duration-300 ease-out ${
+          isZenMode ? "bottom-6 right-6" : "right-6 top-6"
+        }`}
+      >
         <motion.button
           type="button"
           initial={shouldReduceMotion ? false : { opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ opacity: 1, y: 0, scale: isZenMode ? 0.96 : 1 }}
           transition={detailEase}
           aria-label={
-            isZenMode ? "Exit zen mode" : "Enter zen mode"
+            isZenMode ? "Restore the HUD" : "Enter zen mode"
           }
           aria-pressed={isZenMode}
-          className="glass-chip pointer-events-auto inline-flex items-center gap-3 px-4 py-3 font-[family-name:var(--font-mono)] text-[0.72rem] uppercase tracking-[0.24em] text-white/76 transition-all duration-300 ease-out hover:scale-[1.03] hover:border-white/20"
+          className={`glass-chip pointer-events-auto inline-flex items-center font-[family-name:var(--font-mono)] uppercase tracking-[0.24em] text-white/76 transition-all duration-300 ease-out hover:border-white/20 ${
+            isZenMode
+              ? "justify-center gap-0 px-3 py-3 text-[0.68rem] hover:scale-[1.06]"
+              : "gap-3 px-4 py-3 text-[0.72rem] hover:scale-[1.03]"
+          }`}
           onClick={() => setIsZenMode((current) => !current)}
         >
           <EyeIcon crossed={isZenMode} />
-          {isZenMode ? "Exit Zen" : "Zen Mode"}
+          <span className={isZenMode ? "sr-only" : undefined}>
+            {zenToggleLabel}
+          </span>
         </motion.button>
       </div>
 
