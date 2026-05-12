@@ -71,6 +71,7 @@ interface GsplatViewerProps {
   presets: ViewPreset[];
   initialPresetId?: string;
   diagnostics?: DiagnosticsConfig;
+  derivePresetGeometry?: boolean;
   onStatsChange: (stats: ViewerStats) => void;
   onStateChange: (state: ViewerLoadState) => void;
   onViewpointMotionChange?: (isMoving: boolean) => void;
@@ -102,10 +103,14 @@ const floatingChipClass =
 
 const VIEWER_HARDENING = {
   alphaThreshold: 0.1,
-  splatScale: 0.95,
-  cameraFov: 60,
-  lodUpdateAngle: 0.75,
-  lodUpdateDistance: 0.01,
+  splatScale: 1,
+  cameraFov: 62,
+  lodUpdateAngle: 0.08,
+  lodUpdateDistance: 0.002,
+  walkingSpeed: 1.5,
+  walkingBoost: 1,
+  lookDistance: 3.6,
+  sceneBoundsPadding: 1.1,
 } as const;
 
 const gsplatHardeningGlsl = /* glsl */ `
@@ -170,13 +175,26 @@ function sphericalToCartesian(
   return [x, y, z];
 }
 
-function deriveOrbitFromPose(
+function directionFromYawPitch(
+  yaw: number,
+  pitch: number,
+): [number, number, number] {
+  const cosPitch = Math.cos(pitch);
+
+  return [
+    Math.sin(yaw) * cosPitch,
+    Math.sin(pitch),
+    Math.cos(yaw) * cosPitch,
+  ];
+}
+
+function deriveLookFromPose(
   position: readonly number[],
   target: readonly number[],
 ): { yaw: number; pitch: number; distance: number } {
-  const offsetX = position[0] - target[0];
-  const offsetY = position[1] - target[1];
-  const offsetZ = position[2] - target[2];
+  const offsetX = target[0] - position[0];
+  const offsetY = target[1] - position[1];
+  const offsetZ = target[2] - position[2];
   const planarDistance = Math.sqrt(offsetX * offsetX + offsetZ * offsetZ);
   const distance = Math.sqrt(
     offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ,
@@ -187,6 +205,33 @@ function deriveOrbitFromPose(
     pitch: Math.atan2(offsetY, Math.max(planarDistance, 0.0001)),
     distance: Math.max(distance, 0.5),
   };
+}
+
+function mergePresetsWithDerivedGeometry(
+  providedPresets: ViewPreset[],
+  derivedPresets: ViewPreset[],
+): ViewPreset[] {
+  const presetsById = buildPresetMap(providedPresets);
+
+  return derivedPresets.map((derivedPreset, index) => {
+    const providedPreset =
+      presetsById[derivedPreset.id] ?? providedPresets[index] ?? null;
+
+    if (!providedPreset)
+      return derivedPreset;
+
+    return {
+      ...derivedPreset,
+      label: providedPreset.label,
+      description: providedPreset.description,
+      previewImageSrc:
+        providedPreset.previewImageSrc || derivedPreset.previewImageSrc,
+      previewAlt: providedPreset.previewAlt ?? derivedPreset.previewAlt,
+      previewCaption:
+        providedPreset.previewCaption ?? derivedPreset.previewCaption,
+      durationMs: providedPreset.durationMs ?? derivedPreset.durationMs,
+    };
+  });
 }
 
 function easeOutQuart(value: number): number {
@@ -347,13 +392,14 @@ function applyRenderProfile(
   app.scene.gsplat.lodUpdateDistance = VIEWER_HARDENING.lodUpdateDistance;
   app.scene.gsplat.lodUpdateAngle = VIEWER_HARDENING.lodUpdateAngle;
   app.scene.gsplat.lodBehindPenalty = 3;
-  app.scene.gsplat.radialSorting = true;
+  app.scene.gsplat.radialSorting = false;
+  app.scene.gsplat.antiAlias = true;
 
   if (isWebGPU) {
-    app.scene.gsplat.alphaClip = 0.3;
-    app.scene.gsplat.alphaClipForward = 1 / 255;
-    app.scene.gsplat.minPixelSize = 2;
-    app.scene.gsplat.minContribution = 2;
+    app.scene.gsplat.alphaClip = VIEWER_HARDENING.alphaThreshold;
+    app.scene.gsplat.alphaClipForward = VIEWER_HARDENING.alphaThreshold;
+    app.scene.gsplat.minPixelSize = 1.25;
+    app.scene.gsplat.minContribution = 0.32;
 
     return {
       backend: "WebGPU",
@@ -363,10 +409,10 @@ function applyRenderProfile(
   }
 
   graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.35);
-  app.scene.gsplat.alphaClip = 0.42;
-  app.scene.gsplat.alphaClipForward = 0.02;
-  app.scene.gsplat.minPixelSize = 3;
-  app.scene.gsplat.minContribution = 4;
+  app.scene.gsplat.alphaClip = VIEWER_HARDENING.alphaThreshold;
+  app.scene.gsplat.alphaClipForward = VIEWER_HARDENING.alphaThreshold;
+  app.scene.gsplat.minPixelSize = 1.55;
+  app.scene.gsplat.minContribution = 0.58;
 
   return {
     backend: "WebGL2 Fallback",
@@ -434,6 +480,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
       presets,
       initialPresetId,
       diagnostics,
+      derivePresetGeometry,
       onStatsChange,
       onStateChange,
       onViewpointMotionChange,
@@ -458,7 +505,26 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
     const currentTargetRef = useRef<[number, number, number]>([0, 0.7, 0]);
     const desiredPositionRef = useRef<[number, number, number]>([0, 1.4, 7.5]);
     const desiredTargetRef = useRef<[number, number, number]>([0, 0.7, 0]);
-    const orbitRef = useRef({ yaw: 0, pitch: -0.1, distance: 7.5 });
+    const orbitRef = useRef<{
+      yaw: number;
+      pitch: number;
+      distance: number;
+    }>({
+      yaw: Math.PI,
+      pitch: -0.08,
+      distance: VIEWER_HARDENING.lookDistance,
+    });
+    const movementInputRef = useRef({
+      forward: 0,
+      strafe: 0,
+      boost: false,
+    });
+    const movementBoundsRef = useRef<{
+      minX: number;
+      maxX: number;
+      minZ: number;
+      maxZ: number;
+    } | null>(null);
     const interactionRef = useRef({
       isDragging: false,
       pointerX: 0,
@@ -545,6 +611,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
       presetTransitionRef.current = null;
       heroOrbitRef.current = null;
       sceneReadyRef.current = false;
+      movementBoundsRef.current = null;
       setViewpointMotionState(false);
     }, [setViewpointMotionState]);
 
@@ -571,7 +638,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
     );
 
     const syncOrbitFromPose = useCallback(() => {
-      orbitRef.current = deriveOrbitFromPose(
+      orbitRef.current = deriveLookFromPose(
         currentPositionRef.current,
         currentTargetRef.current,
       );
@@ -692,8 +759,13 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
           customAabb.halfExtents.z,
         ];
 
+        const derivedPresets = buildFallbackPresets(center, halfExtents);
         const resolvedPresets =
-          presets.length > 0 ? presets : buildFallbackPresets(center, halfExtents);
+          presets.length > 0
+            ? derivePresetGeometry
+              ? mergePresetsWithDerivedGeometry(presets, derivedPresets)
+              : presets
+            : derivedPresets;
         presetMapRef.current = buildPresetMap(resolvedPresets);
 
         const fallbackPreset = resolvedPresets[0];
@@ -713,6 +785,24 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
         presetTransitionRef.current = null;
         sceneReadyRef.current = true;
         setViewpointMotionState(false);
+        movementBoundsRef.current = {
+          minX:
+            customAabb.center.x -
+            customAabb.halfExtents.x -
+            VIEWER_HARDENING.sceneBoundsPadding,
+          maxX:
+            customAabb.center.x +
+            customAabb.halfExtents.x +
+            VIEWER_HARDENING.sceneBoundsPadding,
+          minZ:
+            customAabb.center.z -
+            customAabb.halfExtents.z -
+            VIEWER_HARDENING.sceneBoundsPadding,
+          maxZ:
+            customAabb.center.z +
+            customAabb.halfExtents.z +
+            VIEWER_HARDENING.sceneBoundsPadding,
+        };
 
         camera.camera.farClip = Math.max(
           120,
@@ -723,21 +813,11 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
         camera.lookAt(new pc.Vec3(...resolvedTarget));
 
         syncOrbitFromPose();
-
-        if (!hasPlayedHeroOrbitRef.current && !shouldReduceMotion) {
-          heroOrbitRef.current = {
-            elapsedMs: 0,
-            durationMs: 5000,
-            centerTarget: new pc.Vec3(...resolvedTarget),
-            startYaw: orbitRef.current.yaw,
-            endYaw: orbitRef.current.yaw + 0.42,
-            startPitch: orbitRef.current.pitch,
-            endPitch: clamp(orbitRef.current.pitch - 0.08, -1.05, 1.05),
-            distance: orbitRef.current.distance * 1.02,
-          };
-          hasPlayedHeroOrbitRef.current = true;
-          setViewpointMotionState(true);
-        }
+        orbitRef.current.distance = Math.max(
+          VIEWER_HARDENING.lookDistance,
+          Math.min(orbitRef.current.distance, VIEWER_HARDENING.lookDistance * 1.35),
+        );
+        hasPlayedHeroOrbitRef.current = true;
 
         publishStats({
           assetName: resolvedAssetName,
@@ -752,10 +832,10 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
         setLoadProgress(100);
       },
       [
+        derivePresetGeometry,
         presets,
         publishStats,
         setViewpointMotionState,
-        shouldReduceMotion,
         syncOrbitFromPose,
         updateLoadState,
       ],
@@ -1015,6 +1095,96 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
     }, [diagnostics?.shortcutKey]);
 
     useEffect(() => {
+      const diagnosticsShortcut = (diagnostics?.shortcutKey ?? "d").toLowerCase();
+
+      const updateMovementState = (event: KeyboardEvent, isPressed: boolean) => {
+        const targetElement = event.target as HTMLElement | null;
+        const tagName = targetElement?.tagName;
+
+        if (
+          targetElement?.isContentEditable ||
+          tagName === "INPUT" ||
+          tagName === "TEXTAREA" ||
+          tagName === "SELECT"
+        ) {
+          return;
+        }
+
+        if (event.shiftKey && event.key.toLowerCase() === diagnosticsShortcut)
+          return;
+
+        let didHandle = true;
+
+        switch (event.key) {
+          case "ArrowUp":
+          case "w":
+          case "W":
+            movementInputRef.current.forward = isPressed ? 1 : 0;
+            break;
+          case "ArrowDown":
+          case "s":
+          case "S":
+            movementInputRef.current.forward = isPressed ? -1 : 0;
+            break;
+          case "ArrowLeft":
+          case "a":
+          case "A":
+            movementInputRef.current.strafe = isPressed ? -1 : 0;
+            break;
+          case "ArrowRight":
+          case "d":
+          case "D":
+            movementInputRef.current.strafe = isPressed ? 1 : 0;
+            break;
+          case "Shift":
+            movementInputRef.current.boost = isPressed;
+            break;
+          default:
+            didHandle = false;
+        }
+
+        if (!didHandle)
+          return;
+
+        event.preventDefault();
+        cancelHeroOrbit();
+        if (isPressed) {
+          presetTransitionRef.current = null;
+          animationActiveRef.current = false;
+          setViewpointMotionState(true);
+          onViewportInteract?.();
+          return;
+        }
+
+        if (
+          movementInputRef.current.forward === 0 &&
+          movementInputRef.current.strafe === 0
+        ) {
+          setViewpointMotionState(false);
+        }
+      };
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        if (event.repeat && event.key !== "Shift")
+          return;
+
+        updateMovementState(event, true);
+      };
+
+      const handleKeyUp = (event: KeyboardEvent) => {
+        updateMovementState(event, false);
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+      window.addEventListener("keyup", handleKeyUp);
+
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+        window.removeEventListener("keyup", handleKeyUp);
+      };
+    }, [cancelHeroOrbit, diagnostics?.shortcutKey, onViewportInteract, setViewpointMotionState]);
+
+    useEffect(() => {
       let isMounted = true;
       let destroyListeners: Array<() => void> = [];
 
@@ -1161,13 +1331,16 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
           };
 
           const syncDesiredOrbitPosition = () => {
-            desiredPositionRef.current = sphericalToCartesian(
+            const direction = directionFromYawPitch(
               orbitRef.current.yaw,
               orbitRef.current.pitch,
-              orbitRef.current.distance,
-              currentTargetRef.current,
             );
-            desiredTargetRef.current = copyVector(currentTargetRef.current);
+            desiredPositionRef.current = copyVector(currentPositionRef.current);
+            desiredTargetRef.current = [
+              currentPositionRef.current[0] + direction[0] * orbitRef.current.distance,
+              currentPositionRef.current[1] + direction[1] * orbitRef.current.distance,
+              currentPositionRef.current[2] + direction[2] * orbitRef.current.distance,
+            ];
             animationActiveRef.current = true;
           };
 
@@ -1227,8 +1400,8 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
 
             orbitRef.current.distance = clamp(
               orbitRef.current.distance * (event.deltaY > 0 ? 1.08 : 0.92),
-              0.8,
-              120,
+              2,
+              12,
             );
 
             syncDesiredOrbitPosition();
@@ -1260,6 +1433,18 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
 
             const heroOrbit = heroOrbitRef.current;
             const presetTransition = presetTransitionRef.current;
+            const hasKeyboardMovement =
+              movementInputRef.current.forward !== 0 ||
+              movementInputRef.current.strafe !== 0;
+            const isCameraInMotion =
+              heroOrbit !== null ||
+              presetTransition !== null ||
+              hasKeyboardMovement ||
+              animationActiveRef.current;
+
+            if (isCameraInMotion) {
+              app.scene.gsplat.dirty = true;
+            }
 
             if (heroOrbit) {
               heroOrbit.elapsedMs += deltaTime * 1000;
@@ -1341,7 +1526,69 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
                 setViewpointMotionState(false);
                 syncOrbitFromPose();
               }
+            } else if (hasKeyboardMovement) {
+              const movementMagnitude = Math.hypot(
+                movementInputRef.current.forward,
+                movementInputRef.current.strafe,
+              );
+              const normalizedForward =
+                movementMagnitude > 0
+                  ? movementInputRef.current.forward / movementMagnitude
+                  : 0;
+              const normalizedStrafe =
+                movementMagnitude > 0
+                  ? movementInputRef.current.strafe / movementMagnitude
+                  : 0;
+              const movementSpeed =
+                VIEWER_HARDENING.walkingSpeed *
+                (movementInputRef.current.boost
+                  ? VIEWER_HARDENING.walkingBoost
+                  : 1);
+              const lockedY = currentPosition.y;
+
+              camera.translateLocal(
+                normalizedStrafe * movementSpeed * deltaTime,
+                0,
+                -normalizedForward * movementSpeed * deltaTime,
+              );
+
+              const translatedPosition = camera.getPosition();
+              const movementBounds = movementBoundsRef.current;
+              const clampedX = movementBounds
+                ? clamp(
+                    translatedPosition.x,
+                    movementBounds.minX,
+                    movementBounds.maxX,
+                  )
+                : translatedPosition.x;
+              const clampedZ = movementBounds
+                ? clamp(
+                    translatedPosition.z,
+                    movementBounds.minZ,
+                    movementBounds.maxZ,
+                  )
+                : translatedPosition.z;
+              const lookDirection = directionFromYawPitch(
+                orbitRef.current.yaw,
+                orbitRef.current.pitch,
+              );
+
+              currentPosition.set(clampedX, lockedY, clampedZ);
+              currentTarget.set(
+                clampedX + lookDirection[0] * orbitRef.current.distance,
+                lockedY + lookDirection[1] * orbitRef.current.distance,
+                clampedZ + lookDirection[2] * orbitRef.current.distance,
+              );
+              desiredPositionRef.current = [clampedX, lockedY, clampedZ];
+              desiredTargetRef.current = [
+                currentTarget.x,
+                currentTarget.y,
+                currentTarget.z,
+              ];
+              animationActiveRef.current = false;
+              setViewpointMotionState(true);
             } else if (animationActiveRef.current) {
+              setViewpointMotionState(true);
               currentPosition.lerp(currentPosition, desiredPosition, 0.16);
               currentTarget.lerp(currentTarget, desiredTarget, 0.1);
 
@@ -1359,6 +1606,7 @@ export const GsplatViewer = forwardRef<GsplatViewerHandle, GsplatViewerProps>(
                 currentPosition.copy(desiredPosition);
                 currentTarget.copy(desiredTarget);
                 animationActiveRef.current = false;
+                setViewpointMotionState(false);
                 syncOrbitFromPose();
               }
             }

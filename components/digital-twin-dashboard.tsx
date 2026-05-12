@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import {
   AnimatePresence,
   motion,
@@ -25,23 +26,17 @@ import type {
 
 import { GsplatViewer, type GsplatViewerHandle } from "./gsplat-viewer";
 
-type HudPanelId =
-  | "identity"
-  | "viewpoints"
-  | "stats"
-  | "utility"
-  | "diagnostics";
+type HudPanelId = "identity" | "telemetry" | "dock" | "diagnostics";
 
 const DESKTOP_PANEL_IDS = [
   "identity",
-  "viewpoints",
-  "stats",
-  "utility",
+  "telemetry",
+  "dock",
   "diagnostics",
 ] as const satisfies readonly HudPanelId[];
 
 const desktopMetricClass =
-  "rounded-[1.2rem] bg-white/[0.045] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+  "rounded-[1.15rem] border border-white/8 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
 
 interface DigitalTwinDashboardProps {
   assetUrl?: string;
@@ -49,6 +44,11 @@ interface DigitalTwinDashboardProps {
   roomPresets: ViewPreset[];
   initialPresetId?: string;
   diagnostics?: DiagnosticsConfig;
+  derivePresetGeometry?: boolean;
+}
+
+interface EyeIconProps {
+  crossed?: boolean;
 }
 
 function formatSplatCount(count: number | null): string {
@@ -98,12 +98,32 @@ function statusDotClassName(status: ViewerStats["status"]): string {
   return "bg-white/38";
 }
 
+function EyeIcon({ crossed = false }: EyeIconProps): JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-4 w-4"
+    >
+      <path d="M2.2 12c1.9-3.5 5.3-5.6 9.8-5.6 4.5 0 7.9 2.1 9.8 5.6-1.9 3.5-5.3 5.6-9.8 5.6-4.5 0-7.9-2.1-9.8-5.6Z" />
+      <circle cx="12" cy="12" r="3" />
+      {crossed ? <path d="M4 20 20 4" /> : null}
+    </svg>
+  );
+}
+
 export function DigitalTwinDashboard({
   assetUrl,
   assetName,
   roomPresets,
   initialPresetId,
   diagnostics,
+  derivePresetGeometry = false,
 }: DigitalTwinDashboardProps): JSX.Element {
   const shouldReduceMotion = useReducedMotion();
   const viewerRef = useRef<GsplatViewerHandle | null>(null);
@@ -131,6 +151,7 @@ export function DigitalTwinDashboard({
   const [previewTilt, setPreviewTilt] = useState({ rotateX: 0, rotateY: 0 });
   const [isViewpointTransitioning, setIsViewpointTransitioning] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [isZenMode, setIsZenMode] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -140,9 +161,38 @@ export function DigitalTwinDashboard({
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+        return;
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT")
+      ) {
+        return;
+      }
+
+      if (event.key.toLowerCase() !== "z")
+        return;
+
+      event.preventDefault();
+      setIsZenMode((current) => !current);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   const panelSpring = shouldReduceMotion
     ? { duration: 0.01 }
-    : { type: "spring" as const, stiffness: 82, damping: 18, mass: 0.92 };
+    : { type: "spring" as const, stiffness: 86, damping: 18, mass: 0.94 };
   const detailEase = shouldReduceMotion
     ? { duration: 0.01 }
     : { duration: 0.34, ease: [0.22, 1, 0.36, 1] as const };
@@ -156,8 +206,10 @@ export function DigitalTwinDashboard({
   );
   const previewPreset = useMemo(
     () =>
-      roomPresets.find((preset) => preset.id === hoveredPresetId) ?? null,
-    [hoveredPresetId, roomPresets],
+      roomPresets.find((preset) => preset.id === hoveredPresetId) ??
+      activePreset ??
+      null,
+    [activePreset, hoveredPresetId, roomPresets],
   );
 
   const canNavigate = viewerStats.status === "ready" && roomPresets.length > 0;
@@ -174,7 +226,10 @@ export function DigitalTwinDashboard({
           ? "Viewport live"
           : "Needs attention";
 
-  const getDesktopPanelClassName = (panelId: HudPanelId, extraClassName: string) => {
+  const getDesktopPanelClassName = (
+    panelId: HudPanelId,
+    extraClassName: string,
+  ) => {
     const panelState = focusStack.getPanelState(panelId);
 
     return [
@@ -187,6 +242,10 @@ export function DigitalTwinDashboard({
       extraClassName,
     ].join(" ");
   };
+
+  const hiddenHudClassName = isZenMode
+    ? "pointer-events-none opacity-0"
+    : "opacity-100";
 
   const revealCopyFeedback = (message: string) => {
     setCopyFeedback(message);
@@ -229,8 +288,8 @@ export function DigitalTwinDashboard({
     const normalizedY = (clientY - bounds.top) / bounds.height - 0.5;
 
     setPreviewTilt({
-      rotateX: -normalizedY * 10,
-      rotateY: normalizedX * 14,
+      rotateX: -normalizedY * 8,
+      rotateY: normalizedX * 12,
     });
   };
 
@@ -243,78 +302,85 @@ export function DigitalTwinDashboard({
 
     return (
       <AnimatePresence>
-        <motion.aside
-          aria-hidden="true"
-          key={previewPreset.id}
-          initial={
-            shouldReduceMotion
-              ? false
-              : { opacity: 0, x: -10, scale: 0.96, filter: "blur(10px)" }
-          }
-          animate={{
-            opacity: 1,
-            x: 0,
-            scale: 1,
-            filter: "blur(0px)",
-            rotateX: shouldReduceMotion ? 0 : previewTilt.rotateX,
-            rotateY: shouldReduceMotion ? 0 : previewTilt.rotateY,
-            y: shouldReduceMotion ? 0 : -2,
-          }}
-          exit={
-            shouldReduceMotion
-              ? { opacity: 0 }
-              : { opacity: 0, x: -10, scale: 0.96, filter: "blur(10px)" }
-          }
-          transition={panelSpring}
-          className="pointer-events-none absolute bottom-0 left-[calc(100%+1rem)] hidden w-[16rem] lg:block"
-          style={{ transformPerspective: 1200 }}
-        >
-          <div className="hud-preview-card overflow-hidden p-3">
-            {shouldRenderFallback ? (
-              <div className="rounded-[1.2rem] bg-[linear-gradient(180deg,rgba(26,33,42,0.96),rgba(13,15,19,0.96))] p-5">
-                <div className="h-28 rounded-[1rem] bg-[radial-gradient(circle_at_top,rgba(142,168,255,0.24),transparent_46%),linear-gradient(180deg,rgba(37,49,66,0.92),rgba(16,17,21,0.92))]" />
-                <p className="mt-4 text-[0.68rem] uppercase tracking-[0.32em] text-[var(--tone-brass)]">
-                  Taskbar preview
-                </p>
-                <p className="mt-2 font-[family-name:var(--font-display)] text-2xl tracking-[-0.04em] text-white">
-                  {previewPreset.label}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-white/62">
-                  {previewPreset.previewCaption ??
-                    "Preview unavailable. Use the room label and metadata until a thumbnail is provided."}
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-[1.2rem]">
-                <Image
-                  src={previewPreset.previewImageSrc}
-                  alt={previewPreset.previewAlt ?? `${previewPreset.label} preview`}
-                  width={256}
-                  height={160}
-                  unoptimized
-                  className="h-36 w-full object-cover"
-                  onError={() =>
-                    setPreviewFailures((currentFailures) => ({
-                      ...currentFailures,
-                      [previewPreset.id]: true,
-                    }))
+        {!isZenMode ? (
+          <motion.aside
+            aria-hidden="true"
+            key={previewPreset.id}
+            initial={
+              shouldReduceMotion
+                ? false
+                : { opacity: 0, x: "-50%", y: 18, scale: 0.96, filter: "blur(10px)" }
+            }
+            animate={{
+              opacity: 1,
+              x: "-50%",
+              y: 0,
+              scale: 1,
+              filter: "blur(0px)",
+              rotateX: shouldReduceMotion ? 0 : previewTilt.rotateX,
+              rotateY: shouldReduceMotion ? 0 : previewTilt.rotateY,
+            }}
+            exit={
+              shouldReduceMotion
+                ? { opacity: 0 }
+                : {
+                    opacity: 0,
+                    x: "-50%",
+                    y: 12,
+                    scale: 0.97,
+                    filter: "blur(10px)",
                   }
-                />
-                <div className="bg-[linear-gradient(180deg,rgba(20,22,26,0.94),rgba(10,11,14,0.96))] px-4 py-4">
-                  <p className="text-[0.68rem] uppercase tracking-[0.32em] text-[var(--tone-brass)]">
-                    Taskbar preview
+            }
+            transition={panelSpring}
+            className="pointer-events-none absolute bottom-[calc(var(--hud-edge-padding)+13.5rem)] left-1/2 hidden w-[18rem] lg:block"
+            style={{ transformPerspective: 1200 }}
+          >
+            <div className="hud-preview-card overflow-hidden p-3">
+              {shouldRenderFallback ? (
+                <div className="rounded-[1.25rem] bg-[linear-gradient(180deg,rgba(18,19,23,0.94),rgba(9,10,13,0.94))] p-5">
+                  <div className="h-32 rounded-[1rem] bg-[radial-gradient(circle_at_top,rgba(142,168,255,0.24),transparent_46%),linear-gradient(180deg,rgba(33,41,54,0.92),rgba(13,14,17,0.92))]" />
+                  <p className="mt-4 text-[0.66rem] uppercase tracking-[0.32em] text-[var(--tone-brass)]">
+                    Simulation card
                   </p>
-                  <p className="mt-2 font-[family-name:var(--font-display)] text-2xl tracking-[-0.04em] text-white">
+                  <p className="mt-2 text-2xl tracking-[-0.04em] text-white">
                     {previewPreset.label}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-white/62">
                     {previewPreset.previewCaption ?? previewPreset.description}
                   </p>
                 </div>
-              </div>
-            )}
-          </div>
-        </motion.aside>
+              ) : (
+                <div className="overflow-hidden rounded-[1.25rem]">
+                  <Image
+                    src={previewPreset.previewImageSrc}
+                    alt={previewPreset.previewAlt ?? `${previewPreset.label} preview`}
+                    width={288}
+                    height={180}
+                    unoptimized
+                    className="h-40 w-full object-cover"
+                    onError={() =>
+                      setPreviewFailures((currentFailures) => ({
+                        ...currentFailures,
+                        [previewPreset.id]: true,
+                      }))
+                    }
+                  />
+                  <div className="bg-[linear-gradient(180deg,rgba(17,18,22,0.94),rgba(7,8,10,0.96))] px-4 py-4">
+                    <p className="text-[0.66rem] uppercase tracking-[0.32em] text-[var(--tone-brass)]">
+                      Simulation card
+                    </p>
+                    <p className="mt-2 text-2xl tracking-[-0.04em] text-white">
+                      {previewPreset.label}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-white/62">
+                      {previewPreset.previewCaption ?? previewPreset.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.aside>
+        ) : null}
       </AnimatePresence>
     );
   };
@@ -329,6 +395,7 @@ export function DigitalTwinDashboard({
           presets={roomPresets}
           initialPresetId={initialPresetId}
           diagnostics={diagnostics}
+          derivePresetGeometry={derivePresetGeometry}
           onStatsChange={setViewerStats}
           onStateChange={setLoadState}
           onViewpointMotionChange={setIsViewpointTransitioning}
@@ -336,7 +403,25 @@ export function DigitalTwinDashboard({
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(4,5,8,0.1),rgba(4,5,8,0.04)_30%,rgba(4,5,8,0.18))]" />
+      <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(180deg,rgba(4,5,8,0.18),rgba(4,5,8,0.02)_34%,rgba(4,5,8,0.22))]" />
+
+      <div className="pointer-events-none absolute right-6 top-6 z-30">
+        <motion.button
+          type="button"
+          initial={shouldReduceMotion ? false : { opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={detailEase}
+          aria-label={
+            isZenMode ? "Exit full screen mode" : "Enter full screen mode"
+          }
+          aria-pressed={isZenMode}
+          className="glass-chip pointer-events-auto inline-flex items-center gap-3 px-4 py-3 font-[family-name:var(--font-mono)] text-[0.72rem] uppercase tracking-[0.24em] text-white/76 transition-all duration-300 ease-out hover:scale-[1.03] hover:border-white/20"
+          onClick={() => setIsZenMode((current) => !current)}
+        >
+          <EyeIcon crossed={isZenMode} />
+          {isZenMode ? "Exit Full Screen" : "Full Screen"}
+        </motion.button>
+      </div>
 
       <div className="pointer-events-none absolute inset-0 z-20 hidden lg:block">
         <motion.section
@@ -344,53 +429,55 @@ export function DigitalTwinDashboard({
           tabIndex={0}
           initial={false}
           animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-          transition={{
-            ...panelSpring,
-            delay: shouldReduceMotion ? 0 : 0,
-          }}
+          transition={panelSpring}
           style={{ zIndex: focusStack.getPanelState("identity").zIndex }}
-          className={getDesktopPanelClassName(
+          className={`${getDesktopPanelClassName(
             "identity",
-            "absolute left-[var(--hud-edge-padding)] top-[var(--hud-edge-padding)] w-[20.5rem] px-6 py-6",
-          )}
+            "absolute left-[var(--hud-edge-padding)] top-[var(--hud-edge-padding)] w-[18rem] px-5 py-5",
+          )} transition-all duration-300 ease-out ${hiddenHudClassName}`}
         >
-          <p className="text-[0.68rem] uppercase tracking-[0.36em] text-[#7f9dcb]">
-            Digital twin review
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[0.64rem] uppercase tracking-[0.38em] text-[#8ea8ff]">
+                AETHERVIEW / HUD
+              </p>
+              <h1 className="mt-3 text-[2rem] leading-none tracking-[-0.06em] text-white">
+                Spatial Sim
+              </h1>
+            </div>
+            <Link
+              href="/"
+              className="focus-ring rounded-full border border-white/8 bg-white/[0.05] px-3 py-2 font-[family-name:var(--font-mono)] text-[0.64rem] uppercase tracking-[0.2em] text-white/52 transition-colors duration-300 hover:border-white/16 hover:bg-white/[0.08]"
+            >
+              Home
+            </Link>
+          </div>
+          <p className="mt-4 text-sm leading-7 text-[var(--text-secondary)]">
+            Walk-through tooling for architectural review, spatial calibration,
+            and presentation-grade digital twin capture.
           </p>
-          <h1 className="mt-3 font-[family-name:var(--font-display)] text-[3rem] leading-none tracking-[-0.06em] text-white">
-            AetherView
-          </h1>
-          <p className="mt-4 max-w-[16rem] text-sm leading-7 text-[var(--text-secondary)]">
-            Spatial operating surfaces tuned for cinematic review and room-level calibration.
-          </p>
-          <div className="mt-7 flex items-center gap-3">
+          <div className="mt-5 flex items-center gap-3">
             <span
               className={`h-2.5 w-2.5 rounded-full ${statusDotClassName(viewerStats.status)}`}
             />
-            <p className="text-lg font-medium text-white">{statusLabel}</p>
+            <p className="font-[family-name:var(--font-mono)] text-[0.76rem] uppercase tracking-[0.24em] text-white/72">
+              {statusLabel}
+            </p>
           </div>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <span className="glass-chip px-3 py-2 text-[0.7rem] uppercase tracking-[0.28em] text-[var(--tone-brass)]">
-              {viewerStats.backend}
-            </span>
-            <span className="glass-chip px-3 py-2 text-[0.7rem] uppercase tracking-[0.28em] text-white/54">
-              {viewerStats.fallbackMode ? "Compatibility path" : `${displayStatus} view`}
-            </span>
-          </div>
-          <div className="mt-6 grid gap-4 text-sm text-white/76">
+          <div className="mt-5 space-y-4 text-sm text-white/74">
             <div>
-              <p className="text-[0.62rem] uppercase tracking-[0.3em] text-white/38">
-                Active viewpoint
+              <p className="text-[0.62rem] uppercase tracking-[0.3em] text-white/34">
+                Active room
               </p>
-              <p className="mt-2 text-[1rem] text-white">
+              <p className="mt-2 text-base text-white">
                 {activePreset?.label ?? "Standby"}
               </p>
             </div>
             <div>
-              <p className="text-[0.62rem] uppercase tracking-[0.3em] text-white/38">
-                Scene source
+              <p className="text-[0.62rem] uppercase tracking-[0.3em] text-white/34">
+                Active file
               </p>
-              <p className="mt-2 break-all text-[0.94rem] text-white/72">
+              <p className="mt-2 break-all text-[0.94rem] text-white/62">
                 {viewerStats.assetName}
               </p>
             </div>
@@ -398,264 +485,267 @@ export function DigitalTwinDashboard({
         </motion.section>
 
         <motion.section
-          {...focusStack.getPanelProps("viewpoints")}
+          {...focusStack.getPanelProps("telemetry")}
           tabIndex={0}
           initial={false}
           animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
           transition={{
             ...panelSpring,
-            delay: shouldReduceMotion ? 0 : 0.2,
+            delay: shouldReduceMotion ? 0 : 0.08,
           }}
-          style={{ zIndex: focusStack.getPanelState("viewpoints").zIndex }}
-          className={getDesktopPanelClassName(
-            "viewpoints",
-            "absolute bottom-[var(--hud-edge-padding)] left-[var(--hud-edge-padding)] w-[24rem] overflow-visible px-5 py-5",
-          )}
-        >
-          <div className="relative">
-            <p className="text-[0.68rem] uppercase tracking-[0.32em] text-white/42">
-              Viewpoint rail
-            </p>
-            <p className="mt-2 max-w-[16rem] text-sm leading-6 text-[var(--text-secondary)]">
-              Hover for a preview card. Click to move, then use diagnostics to capture exact calibration coordinates.
-            </p>
-            <div className="mt-5 space-y-3">
-              {roomPresets.map((preset) => {
-                const isActive = activePresetId === preset.id;
-
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    disabled={!canNavigate}
-                    className={`focus-ring w-full rounded-[1.35rem] px-4 py-4 text-left transition-all duration-300 ease-out ${
-                      isActive
-                        ? "bg-white/[0.1] shadow-[0_18px_42px_rgba(0,0,0,0.24),inset_0_0_0_1px_rgba(212,190,152,0.12)]"
-                        : "bg-white/[0.04] hover:bg-white/[0.07] hover:shadow-[0_16px_34px_rgba(0,0,0,0.18)]"
-                    } disabled:cursor-not-allowed disabled:opacity-45`}
-                    onMouseEnter={() => setHoveredPresetId(preset.id)}
-                    onMouseLeave={resetPreviewState}
-                    onMouseMove={(event) => handlePreviewPointerMove(event, preset.id)}
-                    onFocus={() => setHoveredPresetId(preset.id)}
-                    onBlur={resetPreviewState}
-                    onClick={() => {
-                      viewerRef.current?.focusPreset(preset.id);
-                      setActivePresetId(preset.id);
-                    }}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-[1rem] font-medium text-white">{preset.label}</p>
-                        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                          {preset.description}
-                        </p>
-                      </div>
-                      <span className="pt-1 text-[0.68rem] uppercase tracking-[0.28em] text-white/34">
-                        {isActive ? "Live" : "Jump"}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            {renderPreviewCard()}
-          </div>
-        </motion.section>
-
-        <motion.section
-          {...focusStack.getPanelProps("stats")}
-          tabIndex={0}
-          initial={false}
-          animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-          transition={{
-            ...panelSpring,
-            delay: shouldReduceMotion ? 0 : 0.4,
-          }}
-          style={{ zIndex: focusStack.getPanelState("stats").zIndex }}
-          className={getDesktopPanelClassName(
-            "stats",
-            "absolute right-[var(--hud-edge-padding)] top-[var(--hud-edge-padding)] w-[20rem] px-5 py-5",
-          )}
+          style={{ zIndex: focusStack.getPanelState("telemetry").zIndex }}
+          className={`${getDesktopPanelClassName(
+            "telemetry",
+            "absolute right-[var(--hud-edge-padding)] top-[var(--hud-edge-padding)] w-[19rem] px-5 py-5",
+          )} transition-all duration-300 ease-out ${hiddenHudClassName}`}
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[0.68rem] uppercase tracking-[0.32em] text-white/42">
+              <p className="text-[0.64rem] uppercase tracking-[0.34em] text-white/38">
                 Runtime telemetry
               </p>
-              <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                Live rendering state, performance, and camera motion cues.
+              <p className="mt-2 text-sm leading-6 text-white/58">
+                Live rendering, walk-state, and capture status.
               </p>
             </div>
-            <span className="glass-chip px-3 py-2 text-[0.7rem] uppercase tracking-[0.28em] text-white/48">
-              {isViewpointTransitioning ? "Moving" : "Settled"}
-            </span>
+            <div className="glass-chip animate-badge-pulse px-3 py-2 font-[family-name:var(--font-mono)] text-[0.68rem] uppercase tracking-[0.24em] text-[#d4be98]">
+              Live: {formatFps(viewerStats.fps)}
+            </div>
           </div>
+
           <div className="mt-5 grid grid-cols-2 gap-3">
             <article className={desktopMetricClass}>
-              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                Render path
+              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
+                Backend
               </p>
-              <p className="mt-3 text-[1.05rem] text-white">{viewerStats.backend}</p>
+              <p className="mt-3 font-[family-name:var(--font-mono)] text-[1rem] uppercase tracking-[0.12em] text-white">
+                {viewerStats.backend}
+              </p>
             </article>
             <article className={desktopMetricClass}>
-              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                Splat count
+              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
+                Splat Count
               </p>
-              <p className="mt-3 text-[1.05rem] text-white">
+              <p className="metric-gradient mt-3 font-[family-name:var(--font-mono)] text-[1.1rem] uppercase tracking-[0.08em]">
                 {formatSplatCount(viewerStats.splatCount)}
               </p>
             </article>
             <article className={desktopMetricClass}>
-              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                Live frame rate
+              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
+                View status
               </p>
-              <p className="mt-3 text-[1.05rem] text-white">{formatFps(viewerStats.fps)}</p>
+              <p className="metric-gradient mt-3 font-[family-name:var(--font-mono)] text-[1.05rem] uppercase tracking-[0.1em]">
+                {displayStatus}
+              </p>
             </article>
             <article className={desktopMetricClass}>
-              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                Viewer status
+              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
+                Motion
               </p>
-              <p className="mt-3 text-[1.05rem] text-white">{statusLabel}</p>
+              <p className="mt-3 font-[family-name:var(--font-mono)] text-[1rem] uppercase tracking-[0.12em] text-white">
+                {isViewpointTransitioning ? "Moving" : "Settled"}
+              </p>
             </article>
           </div>
         </motion.section>
 
+        {renderPreviewCard()}
+
         <motion.section
-          {...focusStack.getPanelProps("utility")}
+          {...focusStack.getPanelProps("dock")}
           tabIndex={0}
           initial={false}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
+          animate={{ opacity: 1, x: "-50%", y: 0, scale: 1 }}
           transition={{
             ...panelSpring,
-            delay: shouldReduceMotion ? 0 : 0.6,
+            delay: shouldReduceMotion ? 0 : 0.16,
           }}
-          style={{ zIndex: focusStack.getPanelState("utility").zIndex }}
-          className={getDesktopPanelClassName(
-            "utility",
-            "absolute bottom-[var(--hud-edge-padding)] right-[var(--hud-edge-padding)] w-[20rem] px-5 py-5",
-          )}
+          style={{ zIndex: focusStack.getPanelState("dock").zIndex }}
+          className={`${getDesktopPanelClassName(
+            "dock",
+            "absolute bottom-[var(--hud-edge-padding)] left-1/2 w-[min(calc(100%-3rem),62rem)] px-5 py-5",
+          )} transition-all duration-300 ease-out ${hiddenHudClassName}`}
         >
-          <p className="text-[0.68rem] uppercase tracking-[0.32em] text-[var(--tone-brass)]">
-            Intake dock
-          </p>
-          <p className="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-            Replace the active scene, validate fallback behavior, or use the diagnostic panel for exact camera calibration.
-          </p>
-          <button
-            type="button"
-            className="focus-ring mt-5 inline-flex items-center rounded-full bg-[rgba(212,190,152,0.12)] px-5 py-3 text-sm font-medium text-white transition-all duration-300 ease-out hover:scale-[1.02] hover:bg-[rgba(212,190,152,0.18)]"
-            onClick={() => viewerRef.current?.openFilePicker()}
-          >
-            {isBusy ? "Streaming replacement..." : "Replace scene"}
-          </button>
-          <div className="mt-5 space-y-3 text-sm text-white/72">
-            <div>
-              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                Active file
+          <div className="flex items-start justify-between gap-6">
+            <div className="max-w-[21rem]">
+              <p className="text-[0.64rem] uppercase tracking-[0.34em] text-[var(--tone-brass)]">
+                Simulation Dock
               </p>
-              <p className="mt-2 break-all">{viewerStats.assetName}</p>
-            </div>
-            <div>
-              <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                Diagnostics
-              </p>
-              <p className="mt-2">
-                Press Shift+{(diagnostics?.shortcutKey ?? "D").toUpperCase()} to{" "}
-                {viewerStats.diagnosticsVisible
-                  ? "open the calibration inspector."
-                  : "reveal the calibration inspector."}
+              <p className="mt-3 text-sm leading-7 text-white/62">
+                Curated room jumps, manual walk-through, scene replacement, and
+                hidden calibration tools in one floating control rail.
               </p>
             </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <span className="glass-chip px-4 py-3 font-[family-name:var(--font-mono)] text-[0.68rem] uppercase tracking-[0.24em] text-white/56">
+                WASD / Arrows
+              </span>
+              <span className="glass-chip px-4 py-3 font-[family-name:var(--font-mono)] text-[0.68rem] uppercase tracking-[0.24em] text-white/56">
+                Drag / Wheel
+              </span>
+              <span className="glass-chip px-4 py-3 font-[family-name:var(--font-mono)] text-[0.68rem] uppercase tracking-[0.24em] text-white/56">
+                Z = Zen
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            {roomPresets.map((preset) => {
+              const isActive = activePresetId === preset.id;
+
+              return (
+                <motion.button
+                  key={preset.id}
+                  type="button"
+                  disabled={!canNavigate}
+                  className={`focus-ring rounded-full border px-4 py-3 text-left text-sm font-medium transition-all duration-300 ease-out ${
+                    isActive
+                      ? "border-white/20 bg-white/[0.12] text-white shadow-[0_20px_48px_rgba(0,0,0,0.22)]"
+                      : "border-white/8 bg-white/[0.05] text-white/78 hover:border-white/18 hover:bg-white/[0.08]"
+                  } disabled:cursor-not-allowed disabled:opacity-45`}
+                  whileHover={
+                    shouldReduceMotion
+                      ? undefined
+                      : { scale: 1.045, y: -1 }
+                  }
+                  whileTap={
+                    shouldReduceMotion
+                      ? undefined
+                      : { scale: 0.985 }
+                  }
+                  transition={
+                    shouldReduceMotion
+                      ? { duration: 0.01 }
+                      : { type: "spring", stiffness: 100, damping: 16 }
+                  }
+                  onMouseEnter={() => setHoveredPresetId(preset.id)}
+                  onMouseLeave={resetPreviewState}
+                  onMouseMove={(event) => handlePreviewPointerMove(event, preset.id)}
+                  onFocus={() => setHoveredPresetId(preset.id)}
+                  onBlur={resetPreviewState}
+                  onClick={() => {
+                    viewerRef.current?.focusPreset(preset.id);
+                    setActivePresetId(preset.id);
+                  }}
+                >
+                  <span className="font-[family-name:var(--font-mono)] uppercase tracking-[0.18em]">
+                    {preset.label}
+                  </span>
+                </motion.button>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="focus-ring rounded-full border border-white/10 bg-[rgba(212,190,152,0.14)] px-5 py-3 text-sm font-medium text-white transition-all duration-300 ease-out hover:scale-[1.02] hover:border-white/16 hover:bg-[rgba(212,190,152,0.2)]"
+              onClick={() => viewerRef.current?.openFilePicker()}
+            >
+              {isBusy ? "Streaming replacement..." : "Replace scene"}
+            </button>
+
+            {viewerStats.diagnosticsVisible ? (
+              <button
+                type="button"
+                className="focus-ring rounded-full border border-white/10 bg-[rgba(142,168,255,0.16)] px-5 py-3 text-sm font-medium text-white transition-all duration-300 ease-out hover:scale-[1.02] hover:border-white/16 hover:bg-[rgba(142,168,255,0.22)]"
+                onClick={handleCopyCurrentView}
+              >
+                Copy View Vectors
+              </button>
+            ) : (
+              <div className="glass-chip px-4 py-3 font-[family-name:var(--font-mono)] text-[0.72rem] uppercase tracking-[0.22em] text-white/50">
+                Shift+{(diagnostics?.shortcutKey ?? "D").toUpperCase()} Diagnostics
+              </div>
+            )}
+
+            <div className="font-[family-name:var(--font-mono)] text-[0.72rem] uppercase tracking-[0.22em] text-white/42">
+              Walk speed / 2.2 MPS
+            </div>
+
+            <AnimatePresence mode="wait">
+              {copyFeedback ? (
+                <motion.span
+                  key={copyFeedback}
+                  initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                  transition={detailEase}
+                  className="text-[0.72rem] uppercase tracking-[0.24em] text-white/50"
+                >
+                  {copyFeedback}
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
           </div>
         </motion.section>
 
         <AnimatePresence>
-          {viewerStats.diagnosticsVisible ? (
+          {viewerStats.diagnosticsVisible && !isZenMode ? (
             <motion.section
               {...focusStack.getPanelProps("diagnostics")}
               tabIndex={0}
-              initial={false}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={
                 shouldReduceMotion
                   ? { opacity: 0 }
-                  : { opacity: 0, y: 14, scale: 0.96, filter: "blur(10px)" }
+                  : { opacity: 0, y: 16, scale: 0.98, filter: "blur(10px)" }
               }
-              transition={{
-                ...panelSpring,
-                delay: shouldReduceMotion ? 0 : 0.72,
-              }}
+              transition={panelSpring}
               style={{ zIndex: focusStack.getPanelState("diagnostics").zIndex }}
               className={getDesktopPanelClassName(
                 "diagnostics",
-                "absolute bottom-[calc(var(--hud-edge-padding)+19.5rem)] right-[var(--hud-edge-padding)] w-[20rem] px-5 py-5",
+                "absolute bottom-[calc(var(--hud-edge-padding)+12rem)] right-[var(--hud-edge-padding)] w-[20rem] px-5 py-5",
               )}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[0.68rem] uppercase tracking-[0.32em] text-[var(--tone-brass)]">
+                  <p className="text-[0.64rem] uppercase tracking-[0.34em] text-[var(--tone-brass)]">
                     Diagnostics
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                    Hidden calibration tools for extracting live camera position, rotation, and runtime state.
+                  <p className="mt-2 text-sm leading-6 text-white/58">
+                    Hidden calibration data for exact view vectors and runtime
+                    stability checks.
                   </p>
                 </div>
-                <span className="glass-chip px-3 py-2 text-[0.68rem] uppercase tracking-[0.28em] text-white/44">
+                <span className="glass-chip px-3 py-2 font-[family-name:var(--font-mono)] text-[0.64rem] uppercase tracking-[0.2em] text-white/48">
                   Shift+{(diagnostics?.shortcutKey ?? "D").toUpperCase()}
                 </span>
               </div>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <article className={desktopMetricClass}>
-                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
+                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
                     FPS
                   </p>
-                  <p className="mt-3 text-[1.05rem] text-white">{formatFps(viewerStats.fps)}</p>
+                  <p className="mt-3 font-[family-name:var(--font-mono)] text-white">
+                    {formatFps(viewerStats.fps)}
+                  </p>
                 </article>
                 <article className={desktopMetricClass}>
-                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
+                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
                     GPU memory
                   </p>
-                  <p className="mt-3 text-[1.05rem] text-white">
+                  <p className="mt-3 font-[family-name:var(--font-mono)] text-white">
                     {formatGpuMemory(viewerStats.gpuMemoryBytes)}
                   </p>
                 </article>
                 <article className={desktopMetricClass}>
-                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                    Backend
-                  </p>
-                  <p className="mt-3 text-[1.05rem] text-white">{viewerStats.backend}</p>
-                </article>
-                <article className={desktopMetricClass}>
-                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
+                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
                     Profile
                   </p>
-                  <p className="mt-3 text-[1.05rem] text-white">
+                  <p className="mt-3 font-[family-name:var(--font-mono)] text-white">
                     {viewerStats.renderQuality}
                   </p>
                 </article>
-              </div>
-              <div className="mt-5 flex items-center gap-3">
-                <button
-                  type="button"
-                  className="focus-ring inline-flex items-center rounded-full bg-[rgba(142,168,255,0.16)] px-5 py-3 text-sm font-medium text-white transition-all duration-300 ease-out hover:scale-[1.02] hover:bg-[rgba(142,168,255,0.22)]"
-                  onClick={handleCopyCurrentView}
-                >
-                  Copy View Vectors
-                </button>
-                <AnimatePresence mode="wait">
-                  {copyFeedback ? (
-                    <motion.span
-                      key={copyFeedback}
-                      initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-                      transition={detailEase}
-                      className="text-[0.72rem] uppercase tracking-[0.24em] text-white/52"
-                    >
-                      {copyFeedback}
-                    </motion.span>
-                  ) : null}
-                </AnimatePresence>
+                <article className={desktopMetricClass}>
+                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
+                    State
+                  </p>
+                  <p className="mt-3 font-[family-name:var(--font-mono)] text-white">
+                    {viewerStats.status}
+                  </p>
+                </article>
               </div>
             </motion.section>
           ) : null}
@@ -666,31 +756,30 @@ export function DigitalTwinDashboard({
         <motion.section
           initial={false}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{
-            ...panelSpring,
-            delay: shouldReduceMotion ? 0 : 0,
-          }}
-          className="absolute inset-x-[var(--hud-edge-padding-mobile)] top-[var(--hud-edge-padding-mobile)]"
+          transition={panelSpring}
+          className={`absolute inset-x-[var(--hud-edge-padding-mobile)] top-[var(--hud-edge-padding-mobile)] transition-all duration-300 ease-out ${hiddenHudClassName}`}
         >
           <div className="hud-dock pointer-events-auto px-4 py-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[0.62rem] uppercase tracking-[0.32em] text-[#7f9dcb]">
-                  Digital twin review
+                <p className="text-[0.62rem] uppercase tracking-[0.32em] text-[#8ea8ff]">
+                  AETHERVIEW / HUD
                 </p>
-                <h1 className="mt-2 font-[family-name:var(--font-display)] text-[2.3rem] leading-none tracking-[-0.06em] text-white">
-                  AetherView
+                <h1 className="mt-2 text-[2rem] leading-none tracking-[-0.06em] text-white">
+                  Spatial Sim
                 </h1>
               </div>
-              <span className="glass-chip px-3 py-2 text-[0.68rem] uppercase tracking-[0.28em] text-[var(--tone-brass)]">
-                {viewerStats.backend}
+              <span className="glass-chip px-3 py-2 font-[family-name:var(--font-mono)] text-[0.66rem] uppercase tracking-[0.22em] text-[var(--tone-brass)]">
+                {displayStatus}
               </span>
             </div>
             <div className="mt-4 flex items-center gap-3">
               <span
                 className={`h-2.5 w-2.5 rounded-full ${statusDotClassName(viewerStats.status)}`}
               />
-              <p className="text-sm text-white/82">{statusLabel}</p>
+              <p className="font-[family-name:var(--font-mono)] text-[0.72rem] uppercase tracking-[0.22em] text-white/70">
+                {statusLabel}
+              </p>
             </div>
           </div>
         </motion.section>
@@ -700,97 +789,111 @@ export function DigitalTwinDashboard({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{
             ...panelSpring,
-            delay: shouldReduceMotion ? 0 : 0.2,
+            delay: shouldReduceMotion ? 0 : 0.08,
           }}
-          className="absolute inset-x-[var(--hud-edge-padding-mobile)] bottom-[var(--hud-edge-padding-mobile)]"
+          className={`absolute inset-x-[var(--hud-edge-padding-mobile)] bottom-[var(--hud-edge-padding-mobile)] transition-all duration-300 ease-out ${hiddenHudClassName}`}
         >
           <div className="hud-dock pointer-events-auto max-h-[52svh] overflow-auto px-4 py-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[0.62rem] uppercase tracking-[0.3em] text-white/40">
-                  Viewpoints
+                  Simulation Dock
                 </p>
-                <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                  Docked rail for room jumps and scene replacement.
+                <p className="mt-2 text-sm leading-6 text-white/62">
+                  Walk, jump, replace, and calibrate from one mobile rail.
                 </p>
               </div>
-              <span className="glass-chip px-3 py-2 text-[0.68rem] uppercase tracking-[0.28em] text-white/48">
-                {viewerStats.renderQuality}
+              <span className="glass-chip px-3 py-2 font-[family-name:var(--font-mono)] text-[0.66rem] uppercase tracking-[0.22em] text-white/48">
+                {formatFps(viewerStats.fps)}
               </span>
             </div>
+
             <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
               {roomPresets.map((preset) => {
                 const isActive = activePresetId === preset.id;
 
                 return (
-                  <button
+                  <motion.button
                     key={preset.id}
                     type="button"
                     disabled={!canNavigate}
-                    className={`focus-ring shrink-0 rounded-full px-4 py-3 text-sm font-medium transition-colors duration-200 ${
+                    className={`focus-ring shrink-0 rounded-full border px-4 py-3 text-sm font-medium transition-all duration-300 ease-out ${
                       isActive
-                        ? "bg-white/[0.13] text-white shadow-[0_16px_32px_rgba(0,0,0,0.18)]"
-                        : "bg-white/[0.05] text-white/78 hover:bg-white/[0.08]"
+                        ? "border-white/20 bg-white/[0.13] text-white shadow-[0_16px_32px_rgba(0,0,0,0.2)]"
+                        : "border-white/8 bg-white/[0.05] text-white/78 hover:bg-white/[0.08]"
                     } disabled:opacity-45`}
+                    whileHover={
+                      shouldReduceMotion
+                        ? undefined
+                        : { scale: 1.03 }
+                    }
+                    whileTap={
+                      shouldReduceMotion
+                        ? undefined
+                        : { scale: 0.985 }
+                    }
+                    transition={
+                      shouldReduceMotion
+                        ? { duration: 0.01 }
+                        : { type: "spring", stiffness: 100, damping: 16 }
+                    }
                     onClick={() => {
                       viewerRef.current?.focusPreset(preset.id);
                       setActivePresetId(preset.id);
                     }}
                   >
                     {preset.label}
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
-            <div className="mt-5 grid gap-4 text-sm text-white/74">
+
+            <div className="mt-5 grid gap-4 text-sm text-white/72">
               <div>
-                <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
+                <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
+                  Active room
+                </p>
+                <p className="mt-2 text-white">{activePreset?.label ?? "Standby"}</p>
+              </div>
+              <div>
+                <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/34">
                   Active file
                 </p>
                 <p className="mt-2 break-all">{viewerStats.assetName}</p>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  className="focus-ring rounded-full bg-[rgba(212,190,152,0.12)] px-5 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-[rgba(212,190,152,0.18)]"
-                  onClick={() => viewerRef.current?.openFilePicker()}
-                >
-                  {isBusy ? "Streaming replacement..." : "Replace scene"}
-                </button>
-                {viewerStats.diagnosticsVisible ? (
-                  <button
-                    type="button"
-                    className="focus-ring rounded-full bg-[rgba(142,168,255,0.16)] px-5 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-[rgba(142,168,255,0.22)]"
-                    onClick={handleCopyCurrentView}
-                  >
-                    Copy View Vectors
-                  </button>
-                ) : (
-                  <div className="glass-chip px-4 py-3 text-[0.72rem] uppercase tracking-[0.24em] text-white/48">
-                    Shift+{(diagnostics?.shortcutKey ?? "D").toUpperCase()} diagnostics
-                  </div>
-                )}
-              </div>
             </div>
 
-            {viewerStats.diagnosticsVisible ? (
-              <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-white/74">
-                <article className={desktopMetricClass}>
-                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                    FPS
-                  </p>
-                  <p className="mt-3 text-white">{formatFps(viewerStats.fps)}</p>
-                </article>
-                <article className={desktopMetricClass}>
-                  <p className="text-[0.62rem] uppercase tracking-[0.28em] text-white/38">
-                    GPU memory
-                  </p>
-                  <p className="mt-3 text-white">
-                    {formatGpuMemory(viewerStats.gpuMemoryBytes)}
-                  </p>
-                </article>
-              </div>
-            ) : null}
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="focus-ring rounded-full border border-white/10 bg-[rgba(212,190,152,0.14)] px-5 py-3 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[rgba(212,190,152,0.2)]"
+                onClick={() => viewerRef.current?.openFilePicker()}
+              >
+                {isBusy ? "Streaming replacement..." : "Replace scene"}
+              </button>
+              {viewerStats.diagnosticsVisible ? (
+                <button
+                  type="button"
+                  className="focus-ring rounded-full border border-white/10 bg-[rgba(142,168,255,0.16)] px-5 py-3 text-sm font-medium text-white transition-all duration-300 ease-out hover:bg-[rgba(142,168,255,0.22)]"
+                  onClick={handleCopyCurrentView}
+                >
+                  Copy View Vectors
+                </button>
+              ) : (
+                <div className="glass-chip px-4 py-3 font-[family-name:var(--font-mono)] text-[0.68rem] uppercase tracking-[0.2em] text-white/48">
+                  Shift+{(diagnostics?.shortcutKey ?? "D").toUpperCase()} Diagnostics
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <span className="glass-chip px-4 py-3 font-[family-name:var(--font-mono)] text-[0.66rem] uppercase tracking-[0.2em] text-white/50">
+                WASD / Arrows
+              </span>
+              <span className="glass-chip px-4 py-3 font-[family-name:var(--font-mono)] text-[0.66rem] uppercase tracking-[0.2em] text-white/50">
+                Z = Zen
+              </span>
+            </div>
           </div>
         </motion.section>
       </div>
