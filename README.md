@@ -45,16 +45,16 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Team setup: Git LFS
 
-This repository tracks large spatial assets such as `.ply`, `.sog`, and `.splat`
-with Git LFS. Before working with scene files, run:
+This repository tracks large spatial assets such as `.sog` and `.splat`
+with Git LFS. Before working with heavier scene files, run:
 
 ```bash
 git lfs install
 git lfs pull
 ```
 
-Without Git LFS, large assets may be checked out as pointer files instead of the
-real capture data.
+The bundled demo `.ply` file is stored directly in Git so Vercel can serve it
+without resolving LFS pointers at runtime.
 
 ## Supported capture formats
 
