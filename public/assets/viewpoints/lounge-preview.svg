@@ -1,0 +1,22 @@
+<svg width="320" height="204" viewBox="0 0 320 204" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="204" rx="28" fill="#121416"/>
+  <rect x="18" y="18" width="284" height="168" rx="22" fill="url(#lounge-bg)"/>
+  <path d="M54 132C54 114.327 68.3269 100 86 100H150C167.673 100 182 114.327 182 132V140H54V132Z" fill="#1A2026" stroke="#8497B0" stroke-width="1.5"/>
+  <path d="M197 72H258C268.493 72 277 80.5066 277 91V140H197V72Z" fill="#161B21" stroke="#7186A4" stroke-width="1.5"/>
+  <path d="M96 87L126 69L149 80L176 62" stroke="#E9D3AA" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M44 146H284" stroke="#33404C" stroke-width="2"/>
+  <circle cx="210" cy="56" r="24" fill="url(#lounge-brass)" fill-opacity="0.78"/>
+  <text x="32" y="42" fill="#F4F1E8" font-family="Georgia, 'Times New Roman', serif" font-size="18" letter-spacing="0.8">Lounge</text>
+  <text x="32" y="170" fill="#A8B1BB" font-family="'Segoe UI', sans-serif" font-size="12" letter-spacing="2.2">SEATING / FOCAL DEPTH / AMBIENCE</text>
+  <defs>
+    <linearGradient id="lounge-bg" x1="18" y1="18" x2="302" y2="186" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#191E25"/>
+      <stop offset="0.48" stop-color="#2B3340"/>
+      <stop offset="1" stop-color="#101114"/>
+    </linearGradient>
+    <radialGradient id="lounge-brass" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(210 56) rotate(90) scale(24)">
+      <stop stop-color="#E6C98E"/>
+      <stop offset="1" stop-color="#E6C98E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

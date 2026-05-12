@@ -1,0 +1,23 @@
+<svg width="320" height="204" viewBox="0 0 320 204" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="204" rx="28" fill="#121416"/>
+  <rect x="18" y="18" width="284" height="168" rx="22" fill="url(#kitchen-bg)"/>
+  <rect x="45" y="64" width="82" height="64" rx="10" fill="#161A1F" stroke="#7186A4" stroke-width="1.5"/>
+  <rect x="145" y="52" width="118" height="92" rx="18" fill="#1B2026" stroke="#91A4BF" stroke-width="1.5"/>
+  <rect x="171" y="78" width="67" height="41" rx="9" fill="#262D35"/>
+  <path d="M45 146H272" stroke="#33404C" stroke-width="2"/>
+  <path d="M129 91L159 73L182 84L216 66L254 86" stroke="#E4CAA1" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="247" cy="56" r="22" fill="url(#kitchen-brass)" fill-opacity="0.75"/>
+  <text x="32" y="42" fill="#F4F1E8" font-family="Georgia, 'Times New Roman', serif" font-size="18" letter-spacing="0.8">Kitchen</text>
+  <text x="32" y="170" fill="#A8B1BB" font-family="'Segoe UI', sans-serif" font-size="12" letter-spacing="2.2">ISLAND / COUNTER / ADJACENCY</text>
+  <defs>
+    <linearGradient id="kitchen-bg" x1="18" y1="18" x2="302" y2="186" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18202A"/>
+      <stop offset="0.46" stop-color="#344A67"/>
+      <stop offset="1" stop-color="#121316"/>
+    </linearGradient>
+    <radialGradient id="kitchen-brass" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(247 56) rotate(90) scale(22)">
+      <stop stop-color="#E6C98E"/>
+      <stop offset="1" stop-color="#E6C98E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

@@ -1,0 +1,17 @@
+<svg width="320" height="204" viewBox="0 0 320 204" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="204" rx="28" fill="#121416"/>
+  <rect x="18" y="18" width="284" height="168" rx="22" fill="url(#fallback-bg)"/>
+  <path d="M58 144L109 94L166 122L223 78L262 102" stroke="#E9D3AA" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M58 144H262" stroke="#33404C" stroke-width="2"/>
+  <path d="M88 126H146V78H88V126Z" fill="#171B20" stroke="#7A8BA4" stroke-width="1.5"/>
+  <path d="M178 126H238V62H178V126Z" fill="#1B2128" stroke="#91A4BF" stroke-width="1.5"/>
+  <text x="32" y="42" fill="#F4F1E8" font-family="Georgia, 'Times New Roman', serif" font-size="18" letter-spacing="0.8">Spatial Preview</text>
+  <text x="32" y="170" fill="#A8B1BB" font-family="'Segoe UI', sans-serif" font-size="12" letter-spacing="2.2">PREVIEW UNAVAILABLE</text>
+  <defs>
+    <linearGradient id="fallback-bg" x1="18" y1="18" x2="302" y2="186" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A1F26"/>
+      <stop offset="0.5" stop-color="#253040"/>
+      <stop offset="1" stop-color="#0F1013"/>
+    </linearGradient>
+  </defs>
+</svg>

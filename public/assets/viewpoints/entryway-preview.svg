@@ -1,0 +1,23 @@
+<svg width="320" height="204" viewBox="0 0 320 204" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="320" height="204" rx="28" fill="#121416"/>
+  <rect x="18" y="18" width="284" height="168" rx="22" fill="url(#entryway-bg)"/>
+  <path d="M70 150L135 95L196 118L248 74" stroke="#E7D3A8" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M54 142H104V78H54V142Z" fill="#171A1E" stroke="#5F6D7E" stroke-width="1.5"/>
+  <path d="M116 142H266V60H116V142Z" fill="rgba(20,24,29,0.8)" stroke="#7E8FA5" stroke-width="1.5"/>
+  <path d="M149 78V142" stroke="#2C3641" stroke-width="1.5"/>
+  <path d="M205 60V142" stroke="#2C3641" stroke-width="1.5"/>
+  <circle cx="229" cy="84" r="26" fill="url(#entryway-brass)" fill-opacity="0.72"/>
+  <text x="32" y="42" fill="#F4F1E8" font-family="Georgia, 'Times New Roman', serif" font-size="18" letter-spacing="0.8">Entryway</text>
+  <text x="32" y="170" fill="#A8B1BB" font-family="'Segoe UI', sans-serif" font-size="12" letter-spacing="2.2">THRESHOLD / CIRCULATION</text>
+  <defs>
+    <linearGradient id="entryway-bg" x1="18" y1="18" x2="302" y2="186" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A2028"/>
+      <stop offset="0.52" stop-color="#233244"/>
+      <stop offset="1" stop-color="#101114"/>
+    </linearGradient>
+    <radialGradient id="entryway-brass" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(229 84) rotate(90) scale(26)">
+      <stop stop-color="#E6C98E"/>
+      <stop offset="1" stop-color="#E6C98E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>
