@@ -412,14 +412,14 @@ export function DigitalTwinDashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={detailEase}
           aria-label={
-            isZenMode ? "Exit full screen mode" : "Enter full screen mode"
+            isZenMode ? "Exit zen mode" : "Enter zen mode"
           }
           aria-pressed={isZenMode}
           className="glass-chip pointer-events-auto inline-flex items-center gap-3 px-4 py-3 font-[family-name:var(--font-mono)] text-[0.72rem] uppercase tracking-[0.24em] text-white/76 transition-all duration-300 ease-out hover:scale-[1.03] hover:border-white/20"
           onClick={() => setIsZenMode((current) => !current)}
         >
           <EyeIcon crossed={isZenMode} />
-          {isZenMode ? "Exit Full Screen" : "Full Screen"}
+          {isZenMode ? "Exit Zen" : "Zen Mode"}
         </motion.button>
       </div>
 
@@ -660,7 +660,7 @@ export function DigitalTwinDashboard({
             )}
 
             <div className="font-[family-name:var(--font-mono)] text-[0.72rem] uppercase tracking-[0.22em] text-white/42">
-              Walk speed / 2.2 MPS
+              Walk speed / 1.5 MPS
             </div>
 
             <AnimatePresence mode="wait">
