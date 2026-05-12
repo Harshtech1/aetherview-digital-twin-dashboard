@@ -246,7 +246,7 @@ export function DigitalTwinDashboard({
   const hiddenHudClassName = isZenMode
     ? "pointer-events-none opacity-0"
     : "opacity-100";
-  const zenToggleLabel = isZenMode ? "Restore HUD" : "Zen Mode";
+  const zenToggleLabel = isZenMode ? "Exit Full Screen" : "Full Screen";
 
   const revealCopyFeedback = (message: string) => {
     setCopyFeedback(message);
@@ -417,20 +417,14 @@ export function DigitalTwinDashboard({
           animate={{ opacity: 1, y: 0, scale: isZenMode ? 0.96 : 1 }}
           transition={detailEase}
           aria-label={
-            isZenMode ? "Restore the HUD" : "Enter zen mode"
+            isZenMode ? "Exit full screen mode" : "Enter full screen mode"
           }
           aria-pressed={isZenMode}
-          className={`glass-chip pointer-events-auto inline-flex items-center font-[family-name:var(--font-mono)] uppercase tracking-[0.24em] text-white/76 transition-all duration-300 ease-out hover:border-white/20 ${
-            isZenMode
-              ? "justify-center gap-0 px-3 py-3 text-[0.68rem] hover:scale-[1.06]"
-              : "gap-3 px-4 py-3 text-[0.72rem] hover:scale-[1.03]"
-          }`}
+          className="glass-chip pointer-events-auto inline-flex items-center gap-3 px-4 py-3 font-[family-name:var(--font-mono)] text-[0.72rem] uppercase tracking-[0.24em] text-white/76 transition-all duration-300 ease-out hover:scale-[1.03] hover:border-white/20"
           onClick={() => setIsZenMode((current) => !current)}
         >
           <EyeIcon crossed={isZenMode} />
-          <span className={isZenMode ? "sr-only" : undefined}>
-            {zenToggleLabel}
-          </span>
+          <span>{zenToggleLabel}</span>
         </motion.button>
       </div>
 
